@@ -1,0 +1,6 @@
+db
+username: admin
+pw: admins
+
+app connection:
+mongodb+srv://admin:<password>@hms.ofgfn7a.mongodb.net/?retryWrites=true&w=majority
