@@ -1,8 +1,8 @@
 require('dotenv').config()
 
 const express = require('express');
+const mongoose = require('mongoose');
 const workoutRoutes = require('./routes/workouts')
-// const mongoose = require('mongoose');
 
 // express app
 const app = express();
@@ -16,14 +16,20 @@ app.use((req, res, next) => {
 })
 // app.use(cors());
 
-// Connect to MongoDB
-// mongoose.connect("mongodb+srv://admin:admin123@hms.ofgfn7a.mongodb.net/test");
 
 // Define a route
 app.use('/thomas/workouts', workoutRoutes)
 
-// Start the server
-app.listen(process.env.PORT, () => {
-  console.log(`Server is running`, process.env.PORT);
-});
+// Connect to MongoDB
+mongoose.connect(process.env.MONG_URI)
+    .then(() => {
+        // Start the server
+        app.listen(process.env.PORT, () => {
+            console.log(`Connected to db & Server is running`, process.env.PORT);
+        });  
+    })
+    .catch((error) => {
+        console.log(error)
+    })
+
 

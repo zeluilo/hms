@@ -3,4 +3,8 @@ username: admin
 pw: admins
 
 app connection:
-mongodb+srv://admin:<password>@hms.ofgfn7a.mongodb.net/?retryWrites=true&w=majority
+- to app
+mongodb+srv://admin:admin123@hms.ofgfn7a.mongodb.net/?retryWrites=true&w=majority
+
+- to compass
+mongodb+srv://admin:admin123@hms.ofgfn7a.mongodb.net/
