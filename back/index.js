@@ -1,35 +1,30 @@
-require('dotenv').config()
+require('dotenv').config();
 
 const express = require('express');
-const mongoose = require('mongoose');
-const workoutRoutes = require('./routes/workouts')
+const cors = require('cors');
 
-// express app
+const connection = require('./database');
+const DatabaseTable = require('./classes/DatabaseTable');
+
+const patientController = require('./controller/ReceptionistController');
+const adminController = require('./controller/AdminController');
+
 const app = express();
 
 // Middleware
+app.use(cors());
 app.use(express.json());
 
-app.use((req, res, next) => {
-    console.log(req.path, req.method)
-    next()
-})
-// app.use(cors());
+// Set EJS as the view engine
+app.set('view engine', 'ejs');
 
+// Connect to Port
+app.listen(process.env.PORT, () => {
+    console.log(`Server is running on port ${process.env.PORT}`);
+});
 
-// Define a route
-app.use('/thomas/workouts', workoutRoutes)
+// Import controllers
+app.use('/thomas', patientController);
+app.use('/thomas', adminController);
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONG_URI)
-    .then(() => {
-        // Start the server
-        app.listen(process.env.PORT, () => {
-            console.log(`Connected to db & Server is running`, process.env.PORT);
-        });  
-    })
-    .catch((error) => {
-        console.log(error)
-    })
-
-
+// Add other routes...
