@@ -40,6 +40,12 @@ class DatabaseTable {
     const results = await this.queryAsync(query);
     return results;
   }
+
+  async findBookingsByDoctorAndStatus(doctor, status) {
+    let query = `SELECT * FROM ${this.table} WHERE doctor = ? AND visited = ?`;
+    const results = await this.queryAsync(query, [doctor, status]);
+    return results;
+  }
   
 
   async findAll() {

@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const DatabaseTable = require('../classes/DatabaseTable');
 
 // Single Table
-const userTable = new DatabaseTable('users', 'pId');
+const userTable = new DatabaseTable('users', 'id');
 
 const formatDate = (dateString) => {
     // Assuming dateString is in a different format, adjust the parsing accordingly
@@ -82,6 +82,7 @@ router.post("/register-admin", async (req, res) => {
                 age: ageInYears,
                 password: hashedPassword,
                 adminType: req.body.adminType,
+                department: req.body.department,
                 datecreate: new Date().toISOString().slice(0, 19).replace("T", " ")
             };
 
@@ -121,7 +122,7 @@ router.post("/login", async (req, res) => {
 
         if (!passwordMatch) {
             message = 'Invalid credentials';
-            res.status(401).send('Internal Server Error');            
+            res.status(401).send('Internal Server Error');
             return;
         }
 
@@ -129,12 +130,91 @@ router.post("/login", async (req, res) => {
 
         const token = jwt.sign({ userId: user[0].id }, secret, { expiresIn: '1h' });
 
-        res.json({ token, adminType: user[0].adminType, message: 'Login successfully!' });
+        res.json({ token, user: user[0], message: 'Login successfully!' });
     } catch (error) {
         console.error('Error during logs:', error);
         res.status(500).send('Internal Server Error');
     }
 });
 
+// Add this route after the login route
+router.put("/update-profile/:id", async (req, res) => {
+    console.log('Received data:', req.body);
+    const id = parseInt(req.params.id, 10);
+    console.log('id:', id);
+    let message = '';
+
+    // Extract date of birth from the request body
+    const dob = new Date(req.body.dob);
+
+    // Calculate age based on the current date
+    const currentDate = new Date();
+
+    // Calculate years
+    const ageInYears = currentDate.getFullYear() - dob.getFullYear();
+
+    if (ageInYears < 1) {
+        return res.json({ message: 'Patient must be at least 1 year old to be updated.' });
+    }
+
+    try {
+        console.log('Received data for update:', req.body);
+
+        // Fetch the existing patient details
+        const existingPatient = await userTable.find('id', id);
+
+        if (existingPatient.length === 0) {
+            // Handle case where the patient is not found
+            res.status(404).send('Patient not found');
+            return;
+        }
+
+        // Update patient details with the new values
+        const updatedValues = {
+            firstname: req.body.firstname,
+            lastname: req.body.lastname,
+            email: req.body.email,
+            number: req.body.number,
+            age: ageInYears,
+            dob: formatDate(req.body.dob),
+            address: req.body.address,
+            dateupdate: new Date().toISOString().slice(0, 19).replace("T", " ")
+        };
+
+        // Check for duplicate email and number (exclude the current patient)
+        if (req.body.email !== existingPatient[0].email) {
+            const existingEmail = await userTable.find('email', req.body.email);
+
+            if (existingEmail.length > 0) {
+                return res.json({ message: 'Patient with the same email already exists.' });
+            }
+        }
+
+        if (req.body.number !== existingPatient[0].number) {
+            const existingNumber = await userTable.find('number', req.body.number);
+
+            if (existingNumber.length > 0) {
+                return res.json({ message: 'Patient with the same number already exists.' });
+            }
+        }
+
+        const updated = await userTable.update(id, updatedValues);
+
+        if (updated) {
+            // Generate a new JWT token (if needed)
+            const secret = process.env.JWT_SECRET || 'princezel1234567890';
+            const token = jwt.sign({ userId: updated.id }, secret, { expiresIn: '1h' });
+
+            // Send the updated user information and token in the response
+            res.json({ token, user: updated, message: 'Profiles updated successfully!' });
+        } else {
+            return res.status(500).json({ message: 'Failed to update patient. Please try again.' });
+        }
+
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        res.status(500).send('Internal Server Error');
+    }
+});
 
 module.exports = router;

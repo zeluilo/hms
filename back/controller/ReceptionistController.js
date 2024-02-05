@@ -346,7 +346,7 @@ router.put("/updatebiodata/:id", async (req, res) => {
       });
 
       res.json({ message: 'Medical data updated successfully!' });
-    }
+    }g
   } catch (error) {
     console.error('Error updating medical data:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -417,8 +417,6 @@ router.post("/addappointment", async (req, res) => {
 
   res.json({ message });
 });
-
-
 
 router.put("/updatebooking/:id", async (req, res) => {
   const bookingId = parseInt(req.params.id, 10);
