@@ -172,7 +172,6 @@ class DatabaseTable {
     const idAsInteger = parseInt(id, 10);
 
     const results = await this.queryAsync(query, [...Object.values(updatedValues), idAsInteger]);
-
     return results;
   }
 
