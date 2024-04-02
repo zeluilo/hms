@@ -25,16 +25,37 @@ const formatDate = (dateString) => {
 };
 
 const verifyToken = (req, res, next) => {
-    const token = req.headers.authorization;
-    if (!token) {
+    const authHeader = req.headers.authorization;
+    console.log('Authorization Header:', authHeader);
+    if (!authHeader) {
+        console.log('No token provided');
         return res.status(403).json({ message: 'No token provided' });
     }
 
-    jwt.verify(token.split(' ')[1], process.env.JWT_SECRET || 'princezel1234567890', (err, decoded) => {
+    // Use regular expression to extract the token
+    const tokenRegex = /Bearer\s(.+)/;
+    const match = authHeader.match(tokenRegex);
+    console.log('Match:', match);
+    if (!match || match.length < 2) {
+        console.log('No token provided after extraction');
+        return res.status(403).json({ message: 'No token provided' });
+    }
+    const token = match[1];
+    console.log('Extracted Token:', token);
+
+    const secret = process.env.JWT_SECRET || 'princezel1234567890';
+
+    jwt.verify(token, secret, (err) => {
         if (err) {
-            return res.status(401).json({ message: 'Unauthorized' });
+            if (err.name === 'TokenExpiredError') {
+                // Token has expired
+                console.log('Token expired:', err.expiredAt);
+            } else {
+                // Other JWT verification errors
+                console.log('Error:', err);
+                return res.status(401).json({ message: 'Unauthorized' });
+            }
         }
-        req.userId = decoded.userId;
         next();
     });
 };
@@ -42,7 +63,9 @@ const verifyToken = (req, res, next) => {
 // Route for refreshing the token
 router.post("/refresh-token", verifyToken, async (req, res) => {
     try {
-        const user = await userTable.find('id', req.userId);
+        const userId = req.body.user.id
+        const user = await userTable.find('id', userId);
+        console.log('User:', userId);
         if (!user || user.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
@@ -250,6 +273,19 @@ router.put("/update-profile/:id", async (req, res) => {
         res.status(500).send('Internal Server Error');
     }
 });
+
+// Delete Patient Route
+router.delete("/delete-admin", async (req, res) => {
+    const id = req.query.id;
+  
+    try {
+      await userTable.delete(id);
+      res.json({ message: 'Admin deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting Admin:', error);
+      res.status(500).json({ message: 'Internal Server Error' });
+    }
+  });
 
 // Route to get all users
 router.get("/get-all-users", async (req, res) => {
