@@ -692,7 +692,7 @@ router.put("/updatedepartment/:id", async (req, res) => {
 // Manage Patients Route
 router.get("/getallbookings", async (req, res) => {
   try {
-    const appointments = await patient_bookingTable.findAll();
+    const appointments = await booking_paymentTable.findAll();
     res.json({ appointments });
   } catch (error) {
     console.error('Error fetching bookings:', error);
@@ -702,8 +702,9 @@ router.get("/getallbookings", async (req, res) => {
 
 router.get("/get_bookings", async (req, res) => {
   try {
-    const appointments = await patient_bookingTable.find('status', 'Not Paid');
-    res.json({ appointments });
+    const appointments = await booking_paymentTable.find('status', 'Not Paid');
+    const paidAppointments = await booking_paymentTable.find('billing_status', 'Has Paid');
+    res.json({ appointments, paidAppointments});
   } catch (error) {
     console.error('Error fetching bookings:', error);
     res.status(500).json({ error: 'Internal Server Error' });
