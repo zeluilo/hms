@@ -2,6 +2,9 @@
 const express = require("express");
 const router = express.Router();
 const moment = require("moment");
+const { v4: uuidv4 } = require('uuid');
+const authenticateToken = require('../auth/authenticateToken'); // Import the middleware
+
 // const { checkLogin } = require('./middleware'); // Assuming you have middleware for checking login status
 
 const DatabaseTable = require('../classes/DatabaseTable');
@@ -12,14 +15,16 @@ const familyTable = new DatabaseTable('family', 'id');
 const biodataTable = new DatabaseTable('biodata', 'id');
 const appointmentTable = new DatabaseTable('appointment', 'id');
 const departmentTable = new DatabaseTable('department', 'id');
-const billingTable = new DatabaseTable('billing', 'id');
-
+const paymentTable = new DatabaseTable('payments', 'id');
+const deletepatientTable = new DatabaseTable('deletepatients', 'id');
+const notificationTable = new DatabaseTable('notifications', 'id');
 
 //View Table
 const patient_bookingTable = new DatabaseTable('patient_bookings', 'id');
+const patient_relativeTable = new DatabaseTable('patient_relatives', 'id');
 const booking_paymentTable = new DatabaseTable('booking_payments', 'id');
+const patient_requestTable = new DatabaseTable('patient_request', 'id');
 const medical_recordTable = new DatabaseTable('medical_records', 'id');
-
 
 const formatDate = (dateString) => {
   // Assuming dateString is in a different format, adjust the parsing accordingly
@@ -37,7 +42,6 @@ const formatDateForInput = (dateString) => {
   const minutes = String(dateObject.getMinutes()).padStart(2, '0');
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
-
 
 // Home Route
 router.get("/home", async (req, res) => {
@@ -61,10 +65,25 @@ router.post("/addpatient", async (req, res) => {
 
   // Calculate age based on the current date
   const currentDate = new Date();
-  const ageInMilliseconds = currentDate - dob;
 
-  // Calculate years
-  const ageInYears = currentDate.getFullYear() - dob.getFullYear();
+  // Calculate the difference in years and months
+  const yearsDiff = currentDate.getFullYear() - dob.getFullYear();
+  const monthsDiff = currentDate.getMonth() - dob.getMonth();
+
+  // Adjust years and months if the current date is before the birth date
+  let ageInYears = yearsDiff;
+  let ageInMonths = monthsDiff;
+  if (monthsDiff < 0 || (monthsDiff === 0 && currentDate.getDate() < dob.getDate())) {
+    ageInYears--;
+    ageInMonths = 12 + monthsDiff;
+  }
+
+  // Form the age string
+  const yearsString = ageInYears > 0 ? `${ageInYears} year${ageInYears > 1 ? 's' : ''}` : '';
+  const monthsString = ageInMonths > 0 ? `${ageInMonths} month${ageInMonths > 1 ? 's' : ''}` : '';
+
+  // Combine the age strings
+  const age = yearsString && monthsString ? `${yearsString} ${monthsString}` : yearsString || monthsString;
 
   if (ageInYears < 1) {
     // Reject the request if the age is less than 1 year
@@ -81,7 +100,7 @@ router.post("/addpatient", async (req, res) => {
     address: req.body.address,
     dob: req.body.dob,
     gender: req.body.gender,
-    age: ageInYears,
+    age: age, // Assign the calculated age
     nxt_firstname: req.body.nxt_firstname,
     nxt_lastname: req.body.nxt_lastname,
     nxt_email: req.body.nxt_email,
@@ -102,11 +121,20 @@ router.post("/addpatient", async (req, res) => {
       message = 'Patient with the same number already exists.';
     } else {
       // Insert the patient if no duplicate is found and age is >= 1 year
-      const inserted = await patientTable.insert(values);
-      if (inserted) {
-        message = 'Patient added successfully!';
+      const insertedPatient = await patientTable.insert(values);
+      if (insertedPatient) {
+          message = 'Patient added successfully!';
+          console.log('Insert: ', insertedPatient)
+          // Create a notification for the new admin
+          const notificationMessage = `${req.body.firstname} ${req.body.lastname}`;
+          await notificationTable.insert({ 
+            message: notificationMessage, 
+            patientId: insertedPatient.insertId,
+            userId: req.body.userId,
+            datecreate: new Date().toISOString().slice(0, 19).replace("T", " ")
+          });
       } else {
-        message = 'Failed to add patient. Please try again.';
+          message = 'Failed to add Patient. Please try again.';
       }
     }
   } catch (error) {
@@ -117,7 +145,6 @@ router.post("/addpatient", async (req, res) => {
 
   res.json({ message });
 });
-
 
 // Update Patient Route (PUT)
 router.put("/updatepatient/:pId", async (req, res) => {
@@ -132,11 +159,30 @@ router.put("/updatepatient/:pId", async (req, res) => {
   // Calculate age based on the current date
   const currentDate = new Date();
 
-  // Calculate years
-  const ageInYears = currentDate.getFullYear() - dob.getFullYear();
+  // Calculate the difference in years and months
+  const yearsDiff = currentDate.getFullYear() - dob.getFullYear();
+  const monthsDiff = currentDate.getMonth() - dob.getMonth();
+
+  // Adjust years and months if the current date is before the birth date
+  let ageInYears = yearsDiff;
+  let ageInMonths = monthsDiff;
+  if (monthsDiff < 0 || (monthsDiff === 0 && currentDate.getDate() < dob.getDate())) {
+    ageInYears--;
+    ageInMonths = 12 + monthsDiff;
+  }
+
+  // Form the age string
+  const yearsString = ageInYears > 0 ? `${ageInYears} year${ageInYears > 1 ? 's' : ''}` : '';
+  const monthsString = ageInMonths > 0 ? `${ageInMonths} month${ageInMonths > 1 ? 's' : ''}` : '';
+
+  // Combine the age strings
+  const age = yearsString && monthsString ? `${yearsString} ${monthsString}` : yearsString || monthsString;
 
   if (ageInYears < 1) {
-    return res.status(400).json({ message: 'Patient must be at least 1 year old to be updated.' });
+    // Reject the request if the age is less than 1 year
+    message = 'Patient must be at least 1 year old to be added.';
+    res.json({ message });
+    return;
   }
 
   try {
@@ -158,9 +204,15 @@ router.put("/updatepatient/:pId", async (req, res) => {
       email: req.body.email,
       number: req.body.number,
       address: req.body.address,
-      age: ageInYears,
+      age: age, // Assign the calculated age
       dob: formatDate(req.body.dob),
       gender: req.body.gender,
+      nxt_firstname: req.body.nxt_firstname,
+      nxt_lastname: req.body.nxt_lastname,
+      nxt_email: req.body.nxt_email,
+      nxt_number: req.body.nxt_number,
+      nxt_address: req.body.nxt_address,
+      reference: req.body.reference,
       dateupdate: new Date().toISOString().slice(0, 19).replace("T", " ")
     };
 
@@ -199,6 +251,7 @@ router.put("/updatepatient/:pId", async (req, res) => {
   }
 });
 
+
 // Manage Patients Route
 router.get("/managepatients", async (req, res) => {
   try {
@@ -210,20 +263,34 @@ router.get("/managepatients", async (req, res) => {
   }
 });
 
+router.get("/getnewpatients", async (req, res) => {
+  try {
+    // Implement logic to fetch newly added patients from the patient table
+    const newPatients = await patientTable.findAll(); // You may need to adjust this query based on your database schema and requirements
+
+    // Send the newly added patients as a response
+    res.json(newPatients);
+  } catch (error) {
+    console.error('Error fetching new patients:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 
 
 // Delete Patient Route
-router.get("/deletepatient", async (req, res) => {
+router.delete("/deletepatient", async (req, res) => {
   const pId = req.query.pId;
 
   try {
     await patientTable.delete(pId);
-    res.redirect("/managepatients");
+    res.json({ message: 'Patient deleted successfully' });
   } catch (error) {
     console.error('Error deleting patient:', error);
-    res.status(500).send('Internal Server Error');
+    res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+
 
 router.post("/addfamily", async (req, res) => {
   console.log('Received data:', req.body);
@@ -267,6 +334,16 @@ router.post("/addfamily", async (req, res) => {
   res.json({ message });
 });
 
+router.get("/get-all-relatives", async (req, res) => {
+  try {
+    const relatives = await patient_relativeTable.findAll();
+    res.json({ relatives }); // Convert object to array before sending response
+  } catch (error) {
+    console.error('Error fetching vital signs:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 router.post("/addbiodata", async (req, res) => {
   console.log('Received data:', req.body);
   let message = '';
@@ -301,6 +378,91 @@ router.post("/addbiodata", async (req, res) => {
 
   res.json({ message });
 });
+
+router.post("/create-delete-request", async (req, res) => {
+  console.log('Received data:', req.body);
+  let message = '';
+
+  const values = {
+    patientId: req.body.patientId,
+    reason: req.body.reason,
+    userId: req.body.userId,
+    datecreate: new Date().toISOString().slice(0, 19).replace("T", " ")
+  };
+
+  try {
+    const inserted = await deletepatientTable.insert(values);
+    if (inserted) {
+      message = 'Patient sent successfully!';
+    } else {
+      message = 'Failed to send Patient. Please try again.';
+    }
+    const notificationMessage = `Click to view all`;
+    await notificationTable.insert({ 
+      message: notificationMessage, 
+      requestId: inserted.insertId,
+      userId: req.body.userId,
+      datecreate: new Date().toISOString().slice(0, 19).replace("T", " ")
+    });
+  } catch (error) {
+    console.error('Error sending Patient:', error);
+    message = 'Internal Server Error';
+    res.status(500).send('Internal Server Error');
+  }
+
+  res.json({ message });
+});
+
+// Get Delete Request Route
+router.get("/get-delete-request", async (req, res) => {
+  try {
+    // Retrieve the delete request based on patientId
+    const request = await patient_requestTable.findAll();
+    res.json({ request }); // Convert object to array before sending response
+  } catch (error) {
+    console.error('Error retrieving delete request:', error);
+    return res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+// Delete Delete Request Route
+router.delete("/delete-request/:requestId", async (req, res) => {
+  const deleteRequestId = req.params.requestId;
+
+  try {
+    // Delete the delete request based on deleteRequestId
+    const deleted = await deletepatientTable.delete(deleteRequestId);
+
+    if (deleted) {
+      return res.json({ message: 'Request deleted successfully' });
+    } else {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+  } catch (error) {
+    console.error('Error deleting delete request:', error);
+    return res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+// Delete Delete Request Route
+router.delete("/delete-all-request/:patientId", async (req, res) => {
+  const deleteRequestId = req.params.patientId;
+
+  try {
+    // Delete the delete request based on deleteRequestId
+    const deleted = await deletepatientTable.deleteAll('patientId', deleteRequestId);
+
+    if (deleted) {
+      return res.json({ message: 'Request deleted successfully' });
+    } else {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+  } catch (error) {
+    console.error('Error deleting delete request:', error);
+    return res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
 
 router.get("/getbiodata/:pId", async (req, res) => {
   const pId = parseInt(req.params.pId, 10);
@@ -346,7 +508,7 @@ router.put("/updatebiodata/:id", async (req, res) => {
       });
 
       res.json({ message: 'Medical data updated successfully!' });
-    }g
+    }
   } catch (error) {
     console.error('Error updating medical data:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -364,7 +526,7 @@ router.post("/addappointment", async (req, res) => {
 
   // Check if the price is equal to 0, if true, set the status to 'Paid'
   if (req.body.price == '0') {
-    status = 'Paid';
+    status = 'Has Paid';
   }
 
   let typeofvisit = '';
@@ -380,7 +542,10 @@ router.post("/addappointment", async (req, res) => {
     typeofvisit = req.body.typeofvisit;
   }
 
+  const uId = uuidv4();
+
   const values = {
+    uId: uId, // Associate the UID with the booking record
     reason: req.body.reason,
     price: req.body.price,
     doctor: req.body.doctor,
@@ -420,13 +585,14 @@ router.post("/addappointment", async (req, res) => {
 
 router.put("/updatebooking/:id", async (req, res) => {
   const bookingId = parseInt(req.params.id, 10);
-// Set the default status to 'Not Paid'
-let status = 'Not Paid';
+  // Set the default status to 'Not Paid'
+  let status = 'Not Paid';
 
-// Check if the price is equal to 0, if true, set the status to 'Paid'
-if (req.body.price == 0) {
-  status = 'Paid';
-}
+  // Check if the price is equal to 0, if true, set the status to 'Paid'
+  if (req.body.price == 0) {
+    status = 'Has Paid';
+  }
+  const uId = uuidv4();
   try {
     const existingBooking = await appointmentTable.find('id', bookingId);
 
@@ -436,6 +602,7 @@ if (req.body.price == 0) {
     } else {
       // Assuming you have a function like update in biodataTable to update the data
       await appointmentTable.update(bookingId, {
+        uId: uId, // Associate the UID with the booking record4
         reason: req.body.reason,
         price: req.body.price,
         doctor: req.body.doctor,
@@ -535,8 +702,8 @@ router.get("/getallbookings", async (req, res) => {
 
 router.get("/get_bookings", async (req, res) => {
   try {
-    const patients = await patient_bookingTable.find('status', 'Not Paid');
-    res.json({ patients });
+    const appointments = await patient_bookingTable.find('status', 'Not Paid');
+    res.json({ appointments });
   } catch (error) {
     console.error('Error fetching bookings:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -595,12 +762,13 @@ router.post("/addpayment", async (req, res) => {
     receiptNo: req.body.receiptNo,
     balance: req.body.balance,
     bookingId: req.body.bookingId,
-    status: 'Paid',
+    userId: req.body.userId,
+    status: 'Has Paid',
     datecreate: new Date().toISOString().slice(0, 19).replace("T", " ")
   };
 
   try {
-    const inserted = await billingTable.insert(values);
+    const inserted = await paymentTable.insert(values);
     if (inserted) {
       message = 'BioData added successfully!';
     } else {
@@ -618,7 +786,7 @@ router.post("/addpayment", async (req, res) => {
 
 router.get("/getbilling", async (req, res) => {
   try {
-    const patients = await billingTable.findAll();
+    const patients = await paymentTable.findAll();
     res.json({ patients });
   } catch (error) {
     console.error('Error fetching departments:', error);
@@ -632,7 +800,7 @@ router.put("/updateBookingStatus/:id", async (req, res) => {
   try {
     // Assuming you have a function like update in appointmentTable to update the data
     await appointmentTable.update(bookingId, {
-      status: 'Paid',
+      status: 'Has Paid',
     });
 
     res.json({ success: true, message: 'Booking updated successfully!' });
@@ -642,10 +810,43 @@ router.put("/updateBookingStatus/:id", async (req, res) => {
   }
 });
 
+// Route to update visit status for a booking by uId
+router.put("/updateVisitation/:uId", authenticateToken, async (req, res) => {
+  try {
+      const user = req.user; // Retrieve the user object from the request
+      const uId = req.params.uId;
+      // Perform authorization check to ensure the booking belongs to the logged-in user
+      const booking = await appointmentTable.findByUID(uId);
+      console.log('booking:', booking);
+      console.log('UID:', uId);
+
+      if (!booking) {
+          return res.status(404).json({ message: 'Booking not found' });
+      }
+
+      console.log('Request Headers:', req.headers);
+
+      // Check if the logged-in user has permission to update this booking
+      
+      // if (booking.userId !== user.id) {
+      //     return res.status(403).json({ message: 'Unauthorized' });
+      // }
+
+      // Update visitation status for the booking
+      await appointmentTable.updateWithUID(uId, { visited: 'Has Visited' });
+
+      res.json({ message: 'Visitation status updated successfully' });
+  } catch (error) {
+      console.error('Error updating visitation status:', error);
+      res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
 // Get all bookings with status = 'Not Paid'
 router.get("/getNotPaidBookings", async (req, res) => {
   try {
-    const notPaidBookings = await appointmentTable.find('visited', "Hasn't Visited");
+    const notPaidBookings = await appointmentTable.find('status', "Not Paid");
     res.json({ notPaidBookings });
   } catch (error) {
     console.error('Error fetching not paid bookings:', error);
@@ -656,7 +857,7 @@ router.get("/getNotPaidBookings", async (req, res) => {
 router.get("/calendar", async (req, res) => {
   try {
     console.log('Received request for /calendar'); // Add this line
-    const allBookings = await patient_bookingTable.findBookings('status', "Paid");
+    const allBookings = await patient_bookingTable.findBookings('status', "Has Paid");
     console.log('All Bookings:', allBookings);
     const calendarData = organizeByDay(allBookings);
     console.log('Calendar Data:', calendarData);
@@ -707,6 +908,18 @@ const organizeByDay = (bookings) => {
 
   return organizedData;
 };
+
+// Get all bookings with status = 'Not Paid'
+router.get("/get-grouped-appointments", async (req, res) => {
+  try {
+    const notPaidBookings = await booking_paymentTable.find('status', "Not Paid");
+    const PaidBookings = await booking_paymentTable.find('status', "Has Paid");
+    res.json({ notPaidBookings, PaidBookings });
+  } catch (error) {
+    console.error('Error fetching not paid bookings:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 
 

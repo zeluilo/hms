@@ -10,6 +10,7 @@ const patientController = require('./controller/ReceptionistController');
 const adminController = require('./controller/AdminController');
 const pharmacistController = require('./controller/PharmacistController');
 const doctorController = require('./controller/DoctorController');
+const accountantController = require('./controller/AccountantController');
 
 const app = express();
 
@@ -30,3 +31,5 @@ app.use('/thomas', patientController);
 app.use('/thomas', adminController);
 app.use('/thomas', pharmacistController);
 app.use('/thomas', doctorController);
+app.use('/thomas', accountantController);
+

@@ -4,12 +4,18 @@ const router = express.Router();
 const bcrypt = require("bcrypt");
 const moment = require("moment");
 const jwt = require('jsonwebtoken');
+const fetch = require('node-fetch');
 // const { checkLogin } = require('./middleware'); // Assuming you have middleware for checking login status
 
 const DatabaseTable = require('../classes/DatabaseTable');
 
 // Single Table
 const userTable = new DatabaseTable('users', 'id');
+const notificationTable = new DatabaseTable('notifications', 'id');
+
+// View Table
+const patient_notification = new DatabaseTable('patient_notifications', 'id');
+
 
 const formatDate = (dateString) => {
     // Assuming dateString is in a different format, adjust the parsing accordingly
@@ -18,15 +24,38 @@ const formatDate = (dateString) => {
     return formattedDate;
 };
 
-const formatDateForInput = (dateString) => {
-    const dateObject = new Date(dateString);
-    const year = dateObject.getFullYear();
-    const month = String(dateObject.getMonth() + 1).padStart(2, '0');
-    const day = String(dateObject.getDate()).padStart(2, '0');
-    const hours = String(dateObject.getHours()).padStart(2, '0');
-    const minutes = String(dateObject.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
+const verifyToken = (req, res, next) => {
+    const token = req.headers.authorization;
+    if (!token) {
+        return res.status(403).json({ message: 'No token provided' });
+    }
+
+    jwt.verify(token.split(' ')[1], process.env.JWT_SECRET || 'princezel1234567890', (err, decoded) => {
+        if (err) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+        req.userId = decoded.userId;
+        next();
+    });
 };
+
+// Route for refreshing the token
+router.post("/refresh-token", verifyToken, async (req, res) => {
+    try {
+        const user = await userTable.find('id', req.userId);
+        if (!user || user.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const secret = process.env.JWT_SECRET || 'princezel1234567890';
+        const token = jwt.sign({ userId: user[0].id }, secret, { expiresIn: '1h' });
+
+        res.json({ token, expiration: Date.now() + 3600 * 1000 }); // Expiration in milliseconds
+    } catch (error) {
+        console.error('Error Refreshing And Validating token:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
 
 // Add Admin Route
 router.post("/register-admin", async (req, res) => {
@@ -116,9 +145,13 @@ router.post("/login", async (req, res) => {
             res.status(401).send('Internal Server Error');
             return;
         }
+        console.log('User:', user[0]);
 
         // Compare the provided password with the hashed password in the database
         const passwordMatch = await bcrypt.compare(password, user[0].password);
+        console.log('Pass1:', password);
+        console.log('Pass2:', user[0].password);
+
 
         if (!passwordMatch) {
             message = 'Invalid credentials';
@@ -130,7 +163,8 @@ router.post("/login", async (req, res) => {
 
         const token = jwt.sign({ userId: user[0].id }, secret, { expiresIn: '1h' });
 
-        res.json({ token, user: user[0], message: 'Login successfully!' });
+
+        res.json({ token, user: user[0], tokenExpiration: Date.now() + 3600 * 1000, message: 'Login successfully!' });
     } catch (error) {
         console.error('Error during logs:', error);
         res.status(500).send('Internal Server Error');
@@ -216,5 +250,64 @@ router.put("/update-profile/:id", async (req, res) => {
         res.status(500).send('Internal Server Error');
     }
 });
+
+// Route to get all users
+router.get("/get-all-users", async (req, res) => {
+    try {
+        const receptionist = await userTable.find('adminType', 'Receptionist');
+        const doctor = await userTable.find('adminType', 'Doctor');
+        const pharmacist = await userTable.find('adminType', 'Pharmacist');
+        const nurse = await userTable.find('adminType', 'Nurse');
+        const accountant = await userTable.find('adminType', 'Accountant');
+        const superadmin = await userTable.find('adminType', 'SuperAdmin');
+
+        res.json({ receptionist, doctor, pharmacist, nurse, accountant, superadmin });
+    } catch (error) {
+        console.error('Error fetching data:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+
+// Fetch notificationTables Route
+router.get("/get-notifications", async (req, res) => {
+    try {
+        // Fetch notifications from the database table
+        const notifications = await patient_notification.findAll();
+        res.json({ notifications });
+    } catch (error) {
+        console.error('Error fetching notifications:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Delete notificationTable Route
+router.delete("/delete-notifications/:id", async (req, res) => {
+    const id = req.params.id;
+    try {
+        // Delete the notification from the database table
+        await notificationTable.delete(id);
+    } catch (error) {
+        console.error('Error deleting notification:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Backend Route to Clear All Notifications
+router.delete("/delete-all-notifications", async (req, res) => {
+    try {
+      // Delete all notifications from the database
+      await notificationTable.clearAll();
+    } catch (error) {
+      console.error('Error clearing notifications:', error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
+  
+
+
+
+
+
 
 module.exports = router;
