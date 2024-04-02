@@ -1,29 +1,35 @@
-require('dotenv').config()
+require('dotenv').config();
 
 const express = require('express');
-const workoutRoutes = require('./routes/workouts')
-// const mongoose = require('mongoose');
+const cors = require('cors');
 
-// express app
+const connection = require('./database');
+const DatabaseTable = require('./classes/DatabaseTable');
+
+const patientController = require('./controller/ReceptionistController');
+const adminController = require('./controller/AdminController');
+const pharmacistController = require('./controller/PharmacistController');
+const doctorController = require('./controller/DoctorController');
+const accountantController = require('./controller/AccountantController');
+
 const app = express();
 
 // Middleware
+app.use(cors());
 app.use(express.json());
 
-app.use((req, res, next) => {
-    console.log(req.path, req.method)
-    next()
-})
-// app.use(cors());
+// Set EJS as the view engine
+app.set('view engine', 'ejs');
 
-// Connect to MongoDB
-// mongoose.connect("mongodb+srv://admin:admin123@hms.ofgfn7a.mongodb.net/test");
-
-// Define a route
-app.use('/thomas/workouts', workoutRoutes)
-
-// Start the server
+// Connect to Port
 app.listen(process.env.PORT, () => {
-  console.log(`Server is running`, process.env.PORT);
+    console.log(`Server is running on port ${process.env.PORT}`);
 });
+
+// Import controllers
+app.use('/thomas', patientController);
+app.use('/thomas', adminController);
+app.use('/thomas', pharmacistController);
+app.use('/thomas', doctorController);
+app.use('/thomas', accountantController);
 
