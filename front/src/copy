@@ -1,0 +1,42 @@
+NGN, ₦
+
+https://www.youtube.com/watch?v=kEQggte5bCo
+
+https://www.youtube.com/watch?v=PV9vvD697DQ&t=202s
+
+https://www.codemarketi.com/preview/64940006c8e2d93569597158
+
+ALTER TABLE patients AUTO_INCREMENT = 17;
+
+
+
+
+                                                        <table {...getTableProps()} className="table table-bordered table-hover">
+                      <thead className='table table-primary'>
+                        {headerGroups.map((headerGroup) => (
+                          <tr {...headerGroup.getHeaderGroupProps()}>
+                            {headerGroup.headers.map((column) => (
+                              <th {...column.getHeaderProps(column.getSortByToggleProps())} data-sortable={true}>
+                                {column.render('Header')}
+                                <span>{column.isSorted ? (column.isSortedDesc ? ' 🔽' : ' 🔼') : ''}</span>
+                              </th>
+                            ))}
+                          </tr>
+                        ))}
+                      </thead>
+                      <tbody {...getTableBodyProps()}>
+                        {page.map((row) => {
+                          prepareRow(row);
+                          return (
+                            <tr {...row.getRowProps()}>
+                              {row.cells.map((cell) => (
+                                <td {...cell.getCellProps()}>{cell.render('Cell')}</td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+
+
+className='btn btn-outline-dark btn-md rounded-pill'
