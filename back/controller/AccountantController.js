@@ -36,37 +36,6 @@ const formatDateForInput = (dateString) => {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
-
-// Twilio credentials
-const accountSid = 'AC67624e7738107fd349c737a11261037e';
-const authToken = 'ae5dc50e1bc9978cab5e5c9254b798b2';
-const client = twilio(accountSid, authToken);
-
-// Route for handling SMS sending
-router.post("/sendSMS", async (req, res) => {
-    try {
-        // Extract recipient phone number from request body
-        const { recipientPhoneNumber } = req.body;
-
-        // Send SMS using Twilio
-        const message = await client.messages.create({
-            body: 'This is a test SMS message from your application.',
-            from: '+447700179461', // Your Twilio phone number
-            to: recipientPhoneNumber
-        });
-
-        // Log the message SID
-        console.log('Message sent successfully:', message.sid);
-
-        // Send success response to the client
-        res.status(200).json({ message: 'SMS sent successfully', messageId: message.sid });
-    } catch (error) {
-        console.error('Error sending message:', error);
-        // Send error response to the client
-        res.status(500).json({ error: 'Failed to send SMS' });
-    }
-});
-
 //  Route
 router.get("/get-payment-data", async (req, res) => {
   try {
